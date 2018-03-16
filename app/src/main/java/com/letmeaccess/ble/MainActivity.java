@@ -2,14 +2,7 @@ package com.letmeaccess.ble;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
@@ -28,7 +21,6 @@ import android.widget.EditText;
 import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import pub.devrel.easypermissions.AfterPermissionGranted;
 import pub.devrel.easypermissions.EasyPermissions;
@@ -42,9 +34,6 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     public enum ConnectionState {
         Idle,
         Scanning,
-        Connecting,
-        Connected,
-        Error
     }
 
     private Button sendBtn;
@@ -55,8 +44,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     private BluetoothAdapter mBluetoothAdapter;
     private BluetoothLeScanner mBluetoothLeScanner;
     private ScanCallback mScanCallback;
-    private BluetoothGatt mBluetoothGatt;
-    private BluetoothDevice mLastConnectedDevice;
+    private BleConnection mBleConnection;
     private ConnectionState mConnectionState = ConnectionState.Idle;
 
     private Handler mHandler = new Handler();
@@ -98,10 +86,10 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     private void onSendBtnClick() {
         String data = inputEdt.getText().toString();
-        writeRxCharacteristic(data);
+        mBleConnection.writeRx(data);
     }
 
-    private void cout(final String text) {
+    public void cout(final String text) {
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -254,8 +242,14 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             super.onScanResult(callbackType, result);
             String deviceAddress = result.getDevice().getAddress();
             cout("onScanResult() -> " + deviceAddress);
-            if (mConnectionState == ConnectionState.Idle || mConnectionState == ConnectionState.Scanning) {
-                connect(deviceAddress);
+
+            if (mBleConnection == null) {
+
+                mBleConnection = new BleConnection(MainActivity.this
+                        , result.getDevice()
+                        , bleConnListener);
+
+                mBleConnection.connect(deviceAddress);
             }
         }
 
@@ -267,197 +261,11 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         }
     }
 
-    public boolean connect(String bleDeviceAddress) {
-        // Previously connected device.  Try to reconnect.
-        if (mLastConnectedDevice != null
-                && mLastConnectedDevice.getAddress().equalsIgnoreCase(bleDeviceAddress)
-                && mBluetoothGatt != null) {
-
-            cout("Trying to use an existing mBluetoothGatt for connection.");
-            if (mBluetoothGatt.connect()) {
-                mConnectionState = ConnectionState.Connecting;
-                return true;
-            } else {
-                mConnectionState = ConnectionState.Idle;
-                return false;
-            }
-        }
-
-        final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(bleDeviceAddress);
-        if (device == null) {
-            cout("Device not found.  Unable to connect.");
-            return false;
-        }
-
-        cout("Trying to create a new connection.");
-        mConnectionState = ConnectionState.Connecting;
-
-        // We want to directly connect to the device, so we are setting the autoConnect parameter to false.
-        mBluetoothGatt = device.connectGatt(this, false, mGattCallback);
-        mLastConnectedDevice = device;
-
-        return true;
-    }
-
-    private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+    private BleConnection.Listener bleConnListener = new BleConnection.Listener() {
         @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            String intentAction;
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                cout("Connected to GATT server.");
-                mConnectionState = ConnectionState.Connected;
-
-                boolean serviceDiscoveryStarted = mBluetoothGatt.discoverServices();
-                if (serviceDiscoveryStarted) {
-                    cout("Attempting to start service discovery success");
-                } else {
-                    cout("Attempting to start service discovery fail");
-                }
-
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                if (mConnectionState == ConnectionState.Connected) {
-                    mConnectionState = ConnectionState.Idle;
-                }
-                cout("Disconnected from GATT server.");
-            }
+        public void onEvent(BleConnection.Event event) {
+            cout("Event -> " + event.getClass().getSimpleName() + ": " + event.payload.toString());
         }
-
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                cout("onServicesDiscovered() success -> status: " + status);
-                displaySupportedGattServices();
-                setCharacteristicNotification(true);
-
-            } else {
-                cout("onServicesDiscovered() failed -> status: " + status);
-            }
-        }
-
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt,
-                                         BluetoothGattCharacteristic characteristic,
-                                         int status) {
-
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                cout("onCharacteristicRead() -> data: " + characteristic.getStringValue(0));
-            } else {
-                cout("onCharacteristicRead() -> status: " + status);
-            }
-        }
-
-        @Override
-        public void onCharacteristicChanged(BluetoothGatt gatt,
-                                            BluetoothGattCharacteristic characteristic) {
-            cout("onCharacteristicChanged() -> data: " + characteristic.getStringValue(0));
-        }
-
-        @Override
-        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicWrite(gatt, characteristic, status);
-            cout("onCharacteristicWrite() -> status: " + status);
-        }
-
-        @Override
-        public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            super.onDescriptorRead(gatt, descriptor, status);
-            cout("onDescriptorRead() -> status: " + status);
-        }
-
-        @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            super.onDescriptorWrite(gatt, descriptor, status);
-            cout("onDescriptorWrite() -> status: " + status);
-        }
-
-        @Override
-        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-            super.onMtuChanged(gatt, mtu, status);
-            cout("onMtuChanged() -> status: " + status);
-        }
-
     };
-
-    public void displaySupportedGattServices() {
-        List<BluetoothGattService> services = mBluetoothGatt.getServices();
-        String serviceNameList = "";
-        for (BluetoothGattService service : services) {
-            serviceNameList = serviceNameList.concat(service.getUuid().toString()).concat(",");
-        }
-    }
-
-    public void writeRxCharacteristic(String value) {
-
-        BluetoothGattService uartService = mBluetoothGatt.getService(UARTProfile.UART_SERVICE);
-
-        if (uartService == null) {
-            cout("WriteRx fail: UART service not found!");
-            return;
-        }
-
-        BluetoothGattCharacteristic RxChar = uartService.getCharacteristic(UARTProfile.RX_WRITE_CHAR);
-        if (RxChar == null) {
-            cout("WriteRx fail: UART RxChar not found!");
-            return;
-        }
-
-        RxChar.setValue(value);
-        boolean status = mBluetoothGatt.writeCharacteristic(RxChar);
-        cout("write TXchar - status=" + status);
-    }
-
-    /**
-     * Request a read on a given {@code BluetoothGattCharacteristic}. The read result is reported
-     * asynchronously through the {@code BluetoothGattCallback#onCharacteristicRead(android.bluetooth.BluetoothGatt, android.bluetooth.BluetoothGattCharacteristic, int)}
-     * callback.
-     *
-     * @param characteristic The characteristic to read from.
-     */
-    public void readTxCharacteristic(BluetoothGattCharacteristic characteristic) {
-        cout("readCharacteristic command");
-        mBluetoothGatt.readCharacteristic(characteristic);
-    }
-
-    /**
-     * Enables or disables notification on a give characteristic.
-     *
-     * @param enabled If true, enable notification.  False otherwise.
-     */
-    public void setCharacteristicNotification(boolean enabled) {
-        BluetoothGattService uartService = mBluetoothGatt.getService(UARTProfile.UART_SERVICE);
-        if (uartService == null) {
-            cout("Enable Notification fail: UART service not found!");
-            return;
-        }
-
-        BluetoothGattCharacteristic TxChar = uartService.getCharacteristic(UARTProfile.TX_READ_CHAR);
-        if (TxChar == null) {
-            cout("Enable Notification fail: Tx charateristic not found!");
-            return;
-        }
-
-        mBluetoothGatt.setCharacteristicNotification(TxChar,true);
-
-        BluetoothGattDescriptor descriptor = TxChar.getDescriptor(UARTProfile.TX_READ_CHAR_DESC);
-        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-        mBluetoothGatt.writeDescriptor(descriptor);
-    }
-
-    public void disconnect() {
-        if (mBluetoothAdapter != null && mBluetoothGatt != null) {
-            cout("Disconnecting from GATT server");
-            mBluetoothGatt.disconnect();
-        }
-    }
-
-    public void close() {
-        if (mBluetoothGatt != null) {
-            mConnectionState = ConnectionState.Idle;
-            mBluetoothGatt.close();
-            mBluetoothGatt = null;
-        }
-    }
-
-    //********************************************************************************************//
 
 }
