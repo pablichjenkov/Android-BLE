@@ -34,7 +34,7 @@ public class BleConnection {
         mListener = listener;
     }
 
-    public void connect(String bleDeviceAddress) {
+    public void connect() {
         // Previously connected device.  Try to reconnect.
         if (mBluetoothGatt != null) {
 

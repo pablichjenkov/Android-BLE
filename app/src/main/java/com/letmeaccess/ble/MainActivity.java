@@ -2,51 +2,30 @@ package com.letmeaccess.ble;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanFilter;
-import android.bluetooth.le.ScanResult;
-import android.bluetooth.le.ScanSettings;
+import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.ParcelUuid;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import pub.devrel.easypermissions.AfterPermissionGranted;
 import pub.devrel.easypermissions.EasyPermissions;
 
 
 public class MainActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks {
 
-    private static final int RC_COARSE_LOC_PERM = 1021;
-    private static final int SCAN_PERIOD = 10000;
-
-    public enum ConnectionState {
-        Idle,
-        Scanning,
-    }
+    private static final int REQ_CODE_COARSE_LOC_PERM = 1021;
 
     private Button sendBtn;
     private EditText inputEdt;
     private TextView consoleTxt;
-
-    private BluetoothManager mBluetoothManager;
-    private BluetoothAdapter mBluetoothAdapter;
-    private BluetoothLeScanner mBluetoothLeScanner;
-    private ScanCallback mScanCallback;
-    private BleConnection mBleConnection;
-    private ConnectionState mConnectionState = ConnectionState.Idle;
-
     private Handler mHandler = new Handler();
 
 
@@ -55,12 +34,49 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         setupView();
+        createBle();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        checkPermissions();
+        resumeBle();
+    }
+
+    @Override
+    protected void onDestroy() {
+
+        if (isBluetoothReceiverRegistered) {
+            unregisterReceiver(mBluetoothReceiver);
+        }
+        if (getBleManager() != null) {
+            getBleManager().stopScanning();
+        }
+        if (mBleConnection != null) {
+            mBleConnection.close();
+        }
+
+        super.onDestroy();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
+    }
+
+    @Override
+    public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
+        if (requestCode == REQ_CODE_COARSE_LOC_PERM) {
+            // Don't do anything, when the Activity resumes it will call the startBle method.
+            cout("Ble Permission Granted");
+        }
+    }
+
+    @Override
+    public void onPermissionsDenied(int requestCode, @NonNull List<String> perms) {
+        if (requestCode == REQ_CODE_COARSE_LOC_PERM) {
+            cout("Ble Permission Denied");
+        }
     }
 
     //********************************************** UI ******************************************//
@@ -99,173 +115,140 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         });
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
-    }
-
-    @Override
-    public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
-        cout("onPermissionsGranted:" + requestCode + ":" + perms);
-    }
-
-    @Override
-    public void onPermissionsDenied(int requestCode, @NonNull List<String> perms) {
-        cout("onPermissionsDenied " + requestCode + ": " + perms);
-    }
-
-    @AfterPermissionGranted(RC_COARSE_LOC_PERM)
-    private void checkPermissions() {
-        if (EasyPermissions.hasPermissions(MainActivity.this
-                , Manifest.permission.ACCESS_COARSE_LOCATION)) {
-
-            setupBleHardware();
-
-        } else {
-            // Request one permission
-            EasyPermissions.requestPermissions(this
-                    , getString(R.string.rationale_coarse_location)
-                    , RC_COARSE_LOC_PERM
-                    , Manifest.permission.ACCESS_COARSE_LOCATION);
-        }
-    }
-
     //********************************************************************************************//
 
     //********************************************* BLE ******************************************//
 
-    private void setupBleHardware() {
-        mBluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
-        mBluetoothAdapter = mBluetoothManager.getAdapter();
+    private BleManager mBleManager;
+    private BleConnection mBleConnection;
+    private boolean isBluetoothReceiverRegistered;
 
-        /*
-         * Make sure bluettoth is enabled
-         */
-        if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {
-            //Bluetooth is disabled
-            cout("Bluetooth is disabled. Request enable");
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivity(enableBtIntent);
-            return;
+    private BleManager getBleManager() {
+        if (mBleManager == null) {
+            mBleManager = BleManager.instance(this, mHandler, mBleManagerListener);
         }
-
-        /*
-         * Check for Bluetooth LE Support
-         */
-        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            cout("No LE Support.");
-            return;
-        }
-
-        mBluetoothLeScanner = mBluetoothAdapter.getBluetoothLeScanner();
-        if (mConnectionState == ConnectionState.Idle) {
-            mConnectionState = ConnectionState.Scanning;
-        }
-        startScanning();
+        return mBleManager;
     }
 
-    /**
-     * Start scanning for BLE Advertisements (& set it up to stop after a set period of time).
-     */
-    public void startScanning() {
-        if (mScanCallback == null) {
-            // Will stop the scanning after a set time.
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    stopScanning();
+    private void createBle() {
+        cout("Starting Ble");
+        getBleManager().create();
+    }
+
+    private void resumeBle() {
+        cout("Resuming Ble");
+        getBleManager().resume();
+    }
+
+    private BleManager.Listener mBleManagerListener = new BleManager.Listener() {
+        @Override
+        public void onInit(BleManager.InitEvent initEvent) {
+
+            if (initEvent.error != null) {
+                switch (initEvent.error) {
+                    case LocationPermissionDenied:
+                        cout("Ble needs permission to Location");
+
+                        EasyPermissions.requestPermissions(MainActivity.this
+                                , getString(R.string.rationale_coarse_location)
+                                , REQ_CODE_COARSE_LOC_PERM
+                                , Manifest.permission.ACCESS_COARSE_LOCATION);
+                        break;
+
+                    case BleTurnedOff:
+                        if (!isBluetoothReceiverRegistered) {
+                            cout("Ble is turned off, Enabling it in Settings");
+                            IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+                            registerReceiver(mBluetoothReceiver, filter);
+                            isBluetoothReceiverRegistered = true;
+                            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                            startActivity(enableBtIntent);
+                        }
+                        else {
+                            cout("You need to Enable Bluetooth in Settings to use this app");
+                        }
+
+                        break;
+
+                    case BleNotSupported:
+                        cout("Ble Not Supported");
+                        break;
                 }
-            }, SCAN_PERIOD);
-
-            // Kick off a new scan.
-            mScanCallback = new SampleScanCallback();
-            mBluetoothLeScanner.startScan(buildScanFilters(), buildScanSettings(), mScanCallback);
-
-            String toastText = "Scanning" + " " + TimeUnit.SECONDS.convert(SCAN_PERIOD, TimeUnit.MILLISECONDS) + " sec";
-            cout(toastText);
-
-        } else {
-            cout("Already Scanning");
-        }
-    }
-
-    /**
-     * Stop scanning for BLE Advertisements.
-     */
-    public void stopScanning() {
-        mConnectionState = ConnectionState.Idle;
-        cout("Stopping Scanning");
-
-        // Stop the scan, wipe the callback.
-        mBluetoothLeScanner.stopScan(mScanCallback);
-        mScanCallback = null;
-    }
-
-    /**
-     * Return a List of {@link ScanFilter} objects to filter by Service UUID.
-     */
-    private List<ScanFilter> buildScanFilters() {
-        List<ScanFilter> scanFilters = new ArrayList<>();
-
-        ScanFilter.Builder builder = new ScanFilter.Builder();
-        // Comment out the below line to see all BLE devices around you
-        builder.setServiceUuid(ParcelUuid.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e"));
-        scanFilters.add(builder.build());
-
-        return scanFilters;
-    }
-
-    /**
-     * Return a {@link ScanSettings} object set to use low power (to preserve battery life).
-     */
-    private ScanSettings buildScanSettings() {
-        ScanSettings.Builder builder = new ScanSettings.Builder();
-        builder.setScanMode(ScanSettings.SCAN_MODE_LOW_POWER);
-        return builder.build();
-    }
-
-    private class SampleScanCallback extends ScanCallback {
-        @Override
-        public void onBatchScanResults(List<ScanResult> results) {
-            super.onBatchScanResults(results);
-
-            String batch = "";
-            for (ScanResult scanResult : results) {
-                batch = batch.concat(scanResult.getDevice().getAddress()).concat(",");
             }
-            cout("onBatchResults() -> " + batch);
-        }
-
-        @Override
-        public void onScanResult(int callbackType, ScanResult result) {
-            super.onScanResult(callbackType, result);
-            String deviceAddress = result.getDevice().getAddress();
-            cout("onScanResult() -> " + deviceAddress);
-
-            if (mBleConnection == null) {
-
-                mBleConnection = new BleConnection(MainActivity.this
-                        , result.getDevice()
-                        , bleConnListener);
-
-                mBleConnection.connect(deviceAddress);
+            else {
+                boolean initSuccess = initEvent.payload;
+                getBleManager().startScanning();
             }
         }
 
         @Override
-        public void onScanFailed(int errorCode) {
-            super.onScanFailed(errorCode);
-            mConnectionState = ConnectionState.Idle;
-            cout("Scan failed with error: " + errorCode);
-        }
-    }
+        public void onScan(BleManager.ScanEvent scanEvent) {
 
-    private BleConnection.Listener bleConnListener = new BleConnection.Listener() {
+            if (scanEvent.error != null) {
+                cout("onScan()::error -> ".concat(scanEvent.error.name()));
+            } else {
+                if (scanEvent.payload.isScanning) {
+                    if (scanEvent.payload.scanResults.size() > 0) {
+                        // TODO(Pablo): Instead of picking the first device filter by letmeaccess code matching
+                        // the current user condo device code, or device address. May require connect first.
+                        BluetoothDevice bluetoothDevice = scanEvent.payload.scanResults.get(0).getDevice();
+                        mBleConnection = getBleManager().createConnection(bluetoothDevice, mBleConnectionListener);
+                        cout("Connecting to " + bluetoothDevice.getAddress());
+                    }
+                    else { // Start Scanning
+                        cout("Scanning Ble Start...");
+                    }
+
+                }
+                else { // Stops Scanning
+                    cout("Scanning Ble Finished");
+                }
+            }
+        }
+
+    };
+
+    private BleConnection.Listener mBleConnectionListener = new BleConnection.Listener() {
         @Override
         public void onEvent(BleConnection.Event event) {
-            cout("Event -> " + event.getClass().getSimpleName() + ": " + event.payload.toString());
+            if (event instanceof BleConnection.Connection) {
+                boolean connected = ((BleConnection.Connection)event).payload;
+                cout("Event.Connection -> ".concat(Boolean.toString(connected)));
+
+            } else if (event instanceof BleConnection.DataRead) {
+                String data = ((BleConnection.DataRead)event).payload;
+                cout("Event.DataRead -> ".concat(data));
+
+            } else if (event instanceof BleConnection.DataWrite) {
+                BleConnection.Event.Error error = ((BleConnection.DataWrite)event).error;
+                boolean writeSuccess = (error == null);
+                cout("Event.DataWrite -> ".concat(Boolean.toString(writeSuccess)));
+            }
+
         }
     };
+
+    private BroadcastReceiver mBluetoothReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_OFF);
+
+            switch (state) {
+                case BluetoothAdapter.STATE_ON:
+                    getBleManager().resume();
+                    break;
+
+                case BluetoothAdapter.STATE_OFF:
+                    // TODO(Pablo): Check if our connection exist and close it.
+                    break;
+
+                default:
+                    // Do nothing
+            }
+
+        }
+    };
+
+    //********************************************************************************************//
 
 }
