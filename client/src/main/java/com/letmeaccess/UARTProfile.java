@@ -1,4 +1,4 @@
-package com.letmeaccess.ble;
+package com.letmeaccess;
 
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothProfile;

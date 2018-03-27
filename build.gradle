@@ -42,7 +42,7 @@ ext {
     rxandroidVersion = '2.0.1'
     retrofitVersion = '2.3.0'
     gsonVersion = '2.8.1'
-    timberVersion = '4.5.1'
+    timberVersion = '4.6.0'
     guavaVersion = '18.0'
 
     junitVersion = '4.12'

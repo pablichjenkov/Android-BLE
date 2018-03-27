@@ -1,4 +1,4 @@
-package com.letmeaccess.ble;
+package com.letmeaccess;
 
 import android.Manifest;
 import android.app.Activity;
@@ -14,11 +14,10 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.ParcelUuid;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
-
 import java.util.ArrayList;
 import java.util.List;
-import pub.devrel.easypermissions.EasyPermissions;
 import timber.log.Timber;
 
 
@@ -71,12 +70,14 @@ public final class BleManager {
             return;
         }
         else if (mState == State.Scanning) { // If init() is called while scanning, stop scanning before proceed.
-            stopScanning();
+            Timber.w("BleManager is in Scanning state. Call stopScan() and then call this method");
+            return;
         }
 
-        if (!EasyPermissions.hasPermissions(mActivity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-            mListener.onInit(new BleManager.InitEvent(BleManager.InitError.LocationPermissionDenied));
+        if (ContextCompat.checkSelfPermission(mActivity, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
 
+            mListener.onInit(new BleManager.InitEvent(BleManager.InitError.LocationPermissionDenied));
             return;
         }
 
@@ -87,6 +88,7 @@ public final class BleManager {
                     mListener.onInit(new InitEvent(InitError.BleTurnedOff));
                 }
             });
+
             return;
         }
 
@@ -149,20 +151,22 @@ public final class BleManager {
     }
 
     public void stopScanning() {
+        if (mState == State.Scanning) {
 
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                mState = State.Idle;
-                mInternalScanList.clear();
-                ScanData scanData = new ScanData(Boolean.FALSE, mInternalScanList);
-                mListener.onScan(new ScanEvent(scanData));
-            }
-        });
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    mState = State.Idle;
+                    mInternalScanList.clear();
+                    ScanData scanData = new ScanData(Boolean.FALSE, mInternalScanList);
+                    mListener.onScan(new ScanEvent(scanData));
+                }
+            });
 
-        // Stop the scan, wipe the callback.
-        mBluetoothLeScanner.stopScan(mScanCallback);
+            // Stop the scan, wipe the callback.
+            mBluetoothLeScanner.stopScan(mScanCallback);
 
+        }
     }
 
     public BleConnection createConnection(BluetoothDevice bluetoothDevice, BleConnection.Listener listener) {

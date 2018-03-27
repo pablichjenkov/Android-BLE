@@ -1,4 +1,4 @@
-package com.letmeaccess.ble;
+package com.letmeaccess;
 
 /* package */ class Event<P, E extends Enum<E>> {
     public final P payload;
