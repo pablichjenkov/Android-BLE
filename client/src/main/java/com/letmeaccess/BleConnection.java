@@ -17,8 +17,7 @@ public class BleConnection {
     private enum ConnectionState {
         Idle,
         Connecting,
-        Connected,
-        Error
+        Connected
     }
 
     private Context mContext;
@@ -44,7 +43,7 @@ public class BleConnection {
 
             } else {
                 mConnectionState = ConnectionState.Idle;
-                mListener.onEvent(new Connection(false));
+                mListener.onConnectionEvent(new Connection(false));
                 return;
             }
         }
@@ -67,13 +66,13 @@ public class BleConnection {
                 } else {
                     mConnectionState = ConnectionState.Idle;
                     Timber.d("Attempting to start service discovery fail");
-                    mListener.onEvent(new Connection(false));
+                    mListener.onConnectionEvent(new Connection(false));
                 }
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 mConnectionState = ConnectionState.Idle;
                 Timber.d("Connection Dropped");
-                mListener.onEvent(new Connection(false));
+                mListener.onConnectionEvent(new Connection(false));
             }
         }
 
@@ -86,13 +85,13 @@ public class BleConnection {
                 if (!settingReadNotification) {
                     mConnectionState = ConnectionState.Idle;
                     Timber.d("Error setting read notification");
-                    mListener.onEvent(new Connection(false));
+                    mListener.onConnectionEvent(new Connection(false));
                 }
 
             } else {
                 mConnectionState = ConnectionState.Idle;
                 Timber.d("onServicesDiscovered() failed -> status: " + status);
-                mListener.onEvent(new Connection(false));
+                mListener.onConnectionEvent(new Connection(false));
             }
         }
 
@@ -102,25 +101,25 @@ public class BleConnection {
                                          int status) {
 
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                mListener.onEvent(new DataRead(characteristic.getStringValue(0)));
+                mListener.onDataEvent(new DataRead(characteristic.getStringValue(0)));
             } else {
-                mListener.onEvent(new DataRead(Event.Error.Read));
+                mListener.onDataEvent(new DataRead(DataError.Fail));
             }
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt,
                                             BluetoothGattCharacteristic characteristic) {
-            mListener.onEvent(new DataRead(characteristic.getStringValue(0)));
+            mListener.onDataEvent(new DataRead(characteristic.getStringValue(0)));
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicWrite(gatt, characteristic, status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                mListener.onEvent(new DataWrite(characteristic.getStringValue(0)));
+                mListener.onDataEvent(new DataWrite(characteristic.getStringValue(0)));
             } else {
-                mListener.onEvent(new DataWrite(Event.Error.Read));
+                mListener.onDataEvent(new DataWrite(DataError.Fail));
             }
         }
 
@@ -143,13 +142,13 @@ public class BleConnection {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (mConnectionState == ConnectionState.Connecting) {
                     mConnectionState = ConnectionState.Connected;
-                    mListener.onEvent(new Connection(true));
+                    mListener.onConnectionEvent(new Connection(true));
                 }
 
             } else {
                 mConnectionState = ConnectionState.Idle;
                 Timber.d("onServicesDiscovered() failed -> status: " + status);
-                mListener.onEvent(new Connection(false));
+                mListener.onConnectionEvent(new Connection(false));
             }
         }
 
@@ -195,14 +194,14 @@ public class BleConnection {
 
         if (uartService == null) {
             Timber.d("WriteRx fail: UART service not found!");
-            mListener.onEvent(new DataWrite(Event.Error.Write));
+            mListener.onDataEvent(new DataWrite(DataError.Fail));
             return;
         }
 
         BluetoothGattCharacteristic RxChar = uartService.getCharacteristic(UARTProfile.RX_WRITE_CHAR);
         if (RxChar == null) {
             Timber.d("WriteRx fail: UART RxChar not found!");
-            mListener.onEvent(new DataWrite(Event.Error.Write));
+            mListener.onDataEvent(new DataWrite(DataError.Fail));
             return;
         }
 
@@ -227,62 +226,61 @@ public class BleConnection {
     }
 
 
-    public interface Listener<T extends Event<?>> {
-        void onEvent(T event);
+    public interface Listener {
+        void onConnectionEvent(Connection event);
+        void onDataEvent(DataEvent event);
     }
 
-    public static class Event<T> {
-
-        public enum Error {
-            Write,
-            Read,
-        }
-
-        public final Error error;
-        public final T payload;
-
-        Event(T payload) {
-            this.payload = payload;
-            this.error = null;
-        }
-
-        Event(Error error) {
-            this.payload = null;
-            this.error = error;
-        }
-    }
-
-    public static class Connection extends Event<Boolean> {
+    public static class Connection extends Event<Boolean, ConnectError> {
 
         /* package*/ Connection(Boolean payload) {
             super(payload);
         }
 
-        Connection(Error error) {
+        Connection(ConnectError error) {
             super(error);
         }
     }
 
-    public static class DataRead extends Event<String> {
+    public enum ConnectError {
+        SignalFail
+    }
+
+    public static class DataEvent extends Event<String, DataError> {
+
+        /* package*/ DataEvent(String payload) {
+            super(payload);
+        }
+
+        DataEvent(DataError error) {
+            super(error);
+        }
+    }
+
+    public static class DataRead extends DataEvent {
 
         /* package*/ DataRead(String payload) {
             super(payload);
         }
 
-        DataRead(Error error) {
+        DataRead(DataError error) {
             super(error);
         }
     }
 
-    public static class DataWrite extends Event<String> {
+    public static class DataWrite extends DataEvent {
 
         /* package*/ DataWrite(String payload) {
             super(payload);
         }
 
-        DataWrite(Error error) {
+        DataWrite(DataError error) {
             super(error);
         }
+    }
+
+    public enum DataError {
+        Fail
     }
 
 }

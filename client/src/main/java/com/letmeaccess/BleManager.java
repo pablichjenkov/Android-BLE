@@ -15,7 +15,6 @@ import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.ParcelUuid;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import java.util.ArrayList;
 import java.util.List;
 import timber.log.Timber;
@@ -210,7 +209,6 @@ public final class BleManager {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             super.onScanResult(callbackType, result);
-            Log.w("Pablo","onScanResult()");
 
             if (mState != State.Scanning) {
                 return;
@@ -254,11 +252,11 @@ public final class BleManager {
     }
 
     public static class InitEvent extends Event<Boolean, InitError> {
-        public InitEvent(Boolean payload) {
+        InitEvent(Boolean payload) {
             super(payload);
         }
 
-        public InitEvent(InitError error) {
+        InitEvent(InitError error) {
             super(error);
         }
     }
@@ -270,11 +268,11 @@ public final class BleManager {
     }
 
     public static class ScanEvent extends Event<ScanData, ScanError> {
-        public ScanEvent(ScanData payload) {
+        ScanEvent(ScanData payload) {
             super(payload);
         }
 
-        public ScanEvent(ScanError error) {
+        ScanEvent(ScanError error) {
             super(error);
         }
     }
@@ -283,7 +281,7 @@ public final class BleManager {
         public boolean isScanning;
         public List<ScanResult> scanResults;
 
-        public ScanData(boolean isScanning, List<ScanResult> scanResults) {
+        ScanData(boolean isScanning, List<ScanResult> scanResults) {
             this.isScanning = isScanning;
             this.scanResults = scanResults;
         }

@@ -212,22 +212,24 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     private BleConnection.Listener mBleConnectionListener = new BleConnection.Listener() {
         @Override
-        public void onEvent(BleConnection.Event event) {
-            if (event instanceof BleConnection.Connection) {
-                boolean connected = ((BleConnection.Connection)event).payload;
-                cout("Event.Connection -> ".concat(Boolean.toString(connected)));
+        public void onConnectionEvent(BleConnection.Connection event) {
+            boolean connected = event.payload;
+            cout("Event.Connection -> ".concat(Boolean.toString(connected)));
+        }
 
-            } else if (event instanceof BleConnection.DataRead) {
-                String data = ((BleConnection.DataRead)event).payload;
+        @Override
+        public void onDataEvent(BleConnection.DataEvent event) {
+            if (event instanceof BleConnection.DataRead) {
+                String data = event.payload;
                 cout("Event.DataRead -> ".concat(data));
 
             } else if (event instanceof BleConnection.DataWrite) {
-                BleConnection.Event.Error error = ((BleConnection.DataWrite)event).error;
+                BleConnection.DataError error = event.error;
                 boolean writeSuccess = (error == null);
                 cout("Event.DataWrite -> ".concat(Boolean.toString(writeSuccess)));
             }
-
         }
+
     };
 
     private BroadcastReceiver mBluetoothReceiver = new BroadcastReceiver() {
