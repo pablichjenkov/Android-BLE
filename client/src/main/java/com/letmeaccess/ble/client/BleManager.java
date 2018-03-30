@@ -1,4 +1,4 @@
-package com.letmeaccess;
+package com.letmeaccess.ble.client;
 
 import android.Manifest;
 import android.app.Activity;
@@ -31,31 +31,30 @@ public final class BleManager {
         Scanning,
     }
 
-    private Activity mActivity;
+    private Context mContext;
     private Handler mHandler;
     private Listener mListener;
-    private BluetoothManager mBluetoothManager;
     private BluetoothAdapter mBluetoothAdapter;
     private BluetoothLeScanner mBluetoothLeScanner;
     private State mState = State.Idle;
     private List<ScanResult> mInternalScanList;
 
 
-    public static BleManager instance(Activity activity, Handler handler, Listener listener) {
-        return new BleManager(activity, handler, listener);
-    }
-
-    private BleManager(Activity activity, Handler handler, Listener listener) {
-        mActivity = activity;
+    private BleManager(Context context, Handler handler, Listener listener) {
+        mContext = context;
         mHandler = handler;
         mListener = listener;
         mInternalScanList = new ArrayList<>();
     }
 
+    public static BleManager instance(Activity activity, Handler handler, Listener listener) {
+        return new BleManager(activity, handler, listener);
+    }
+
     public void create() {
         mState = State.Created;
-        mBluetoothManager = (BluetoothManager) mActivity.getSystemService(Context.BLUETOOTH_SERVICE);
-        mBluetoothAdapter = mBluetoothManager.getAdapter();
+        BluetoothManager bluetoothManager = (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
+        mBluetoothAdapter = bluetoothManager.getAdapter();
     }
 
     public void resume() {
@@ -73,7 +72,7 @@ public final class BleManager {
             return;
         }
 
-        if (ContextCompat.checkSelfPermission(mActivity, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
 
             mListener.onInit(new BleManager.InitEvent(BleManager.InitError.LocationPermissionDenied));
@@ -91,13 +90,14 @@ public final class BleManager {
             return;
         }
 
-        if (!mActivity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        if (!mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
             mHandler.post(new Runnable() {
                 @Override
                 public void run() {
                     mListener.onInit(new InitEvent(InitError.BleNotSupported));
                 }
             });
+
             return;
         }
 
@@ -112,9 +112,6 @@ public final class BleManager {
         });
     }
 
-    /**
-     * Start scanning for BLE Advertisements (& set it up to stop after a set period of time).
-     */
     public void startScanning() {
         if (mState != State.Scanning) {
             mState = State.Scanning;
@@ -155,7 +152,7 @@ public final class BleManager {
             mHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    mState = State.Idle;
+                    mState = State.Setup;
                     mInternalScanList.clear();
                     ScanData scanData = new ScanData(Boolean.FALSE, mInternalScanList);
                     mListener.onScan(new ScanEvent(scanData));
@@ -170,7 +167,7 @@ public final class BleManager {
 
     public BleConnection createConnection(BluetoothDevice bluetoothDevice, BleConnection.Listener listener) {
         // TODO(Pablo): Verify this device connection does not exist already.
-        BleConnection newConnection = new BleConnection(mActivity, bluetoothDevice, listener);
+        BleConnection newConnection = new BleConnection(mContext, bluetoothDevice, listener);
         newConnection.connect();
         return newConnection;
     }

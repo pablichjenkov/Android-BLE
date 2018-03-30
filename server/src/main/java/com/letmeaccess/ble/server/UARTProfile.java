@@ -1,8 +1,19 @@
-package com.letmeaccess;
+package com.letmeaccess.ble.server;
+
 
 import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothProfile;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.UUID;
+
+/**
+ * UART Profile details
+ * MIT Licnese
+ * 2016 - Thejesh GN - https://hejeshgn.com
+ */
 
 
 public class UARTProfile {
@@ -15,6 +26,7 @@ public class UARTProfile {
     //TX READ Notify
     public static UUID TX_READ_CHAR = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
     public static UUID TX_READ_CHAR_DESC = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    public final static int DESCRIPTOR_PERMISSION = BluetoothGattDescriptor.PERMISSION_WRITE;
 
     public static String getStateDescription(int state) {
         switch (state) {

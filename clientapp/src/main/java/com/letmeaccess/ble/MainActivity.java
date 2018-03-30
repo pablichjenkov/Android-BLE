@@ -15,8 +15,10 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import com.letmeaccess.BleConnection;
-import com.letmeaccess.BleManager;
+
+import com.letmeaccess.ble.client.BleConnection;
+import com.letmeaccess.ble.client.BleManager;
+
 import java.util.List;
 import pub.devrel.easypermissions.EasyPermissions;
 
