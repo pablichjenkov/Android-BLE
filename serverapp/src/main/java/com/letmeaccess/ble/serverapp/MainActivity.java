@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.hardware.usb.UsbAccessory;
+import android.hardware.usb.UsbDevice;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,11 +17,14 @@ import android.widget.EditText;
 import android.widget.TextView;
 import com.letmeaccess.ble.server.BleServer;
 import com.letmeaccess.ble.server.BleServerConnection;
+import com.letmeaccess.usb.Socket;
+import com.letmeaccess.usb.aoa.UsbAoaManager;
+import com.letmeaccess.usb.host.UsbDeviceConfiguration;
+import com.letmeaccess.usb.host.UsbHostManager;
+import java.util.Map;
 
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final String TAG = "MainActivity";
 
     private Button sendBtn;
     private EditText inputEdt;
@@ -222,8 +227,85 @@ public class MainActivity extends AppCompatActivity {
     //********************************************************************************************//
 
     //****************************************** USB *********************************************//
+    private UsbAoaManager mUsbAoaManager;
+    private boolean isUsbSocketOpen;
+    private Socket mAoaSocket;
+
+    private UsbHostManager mUsbHostManager;
+    private Socket mUsbHostSocket;
+
+    private void setupManagers() {
+
+        //**********************************************
+        //****************** USB AOA *******************
+        //**********************************************
+        mUsbAoaManager = new UsbAoaManager(this);
+        mUsbAoaManager.probe(new UsbAoaManager.Listener() {
+            @Override
+            public void onSelectAccessory(UsbAccessory[] accessoryArray) {
+                mUsbAoaManager.createSocket(accessoryArray[0], mAccessoryListener);
+            }
+
+            @Override
+            public void onSocketCreated(Socket socket) {
+                mAoaSocket = socket;
+                mAoaSocket.open();
+            }
+        });
 
 
+        //**********************************************
+        //****************** USB HOST ******************
+        //**********************************************
+        mUsbHostManager = new UsbHostManager(this);
+        mUsbHostManager.probe(new UsbHostManager.Listener() {
+            @Override
+            public void onSelectUsbDevice(Map<String, UsbDevice> usbDeviceMap) {
+
+            }
+
+            @Override
+            public void onSocketCreated(Socket socket) {
+
+            }
+
+            @Override
+            public UsbDeviceConfiguration onProvideDeviceConfiguration(UsbDevice usbDevice) {
+                UsbDeviceConfiguration configuration = new UsbDeviceConfiguration();
+                configuration.deviceInterface = usbDevice.getInterface(0);
+                configuration.readEndPoint = configuration.deviceInterface.getEndpoint(0);
+                configuration.writeEndPoint = configuration.deviceInterface.getEndpoint(1);
+
+                return configuration;
+            }
+        });
+
+    }
+
+    private Socket.AccessoryListener mAccessoryListener = new Socket.AccessoryListener() {
+        @Override
+        public void onError(Socket.AccessoryError error) {
+            isUsbSocketOpen = false;
+            cout("AccessoryListener.onError -> " + error.name());
+        }
+
+        @Override
+        public void onOpen() {
+            isUsbSocketOpen = true;
+            cout("AccessoryListener.onOpen()");
+            //vmcInput = new VmcInput(new ChunkQueue());
+            //mCurPeripheral = new Cashless2(MdbManager.this);
+        }
+
+        @Override
+        public void onRead(byte[] data) {
+            cout("AccessoryListener.onRead() -> " + new String(data));
+            if (isUsbSocketOpen) {
+                // Feed the Vmc Action queue before being parsed
+                //vmcInput.chunkQueue.offer(data);
+            }
+        }
+    };
 
     //********************************************************************************************//
 
