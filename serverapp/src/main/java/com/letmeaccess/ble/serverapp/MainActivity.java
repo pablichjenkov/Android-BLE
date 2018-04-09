@@ -5,18 +5,17 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbDevice;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import com.letmeaccess.ble.server.BleServer;
 import com.letmeaccess.ble.server.BleServerConnection;
+import com.letmeaccess.ble.serverapp.gate.GateController;
 import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
 import com.letmeaccess.usb.host.UsbDeviceConfiguration;
@@ -26,9 +25,10 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button sendBtn;
     private EditText inputEdt;
     private TextView consoleTxt;
+    private Handler mHandler = new Handler(Looper.getMainLooper());
+    private GateController gateController;
 
 
     @Override
@@ -36,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         setupView();
+        setupGateController();
         createBleServer();
     }
 
@@ -47,6 +48,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         getBleServer().shutdownServer();
+        if (gateController != null) {
+            gateController.close();
+        }
 
         super.onDestroy();
     }
@@ -54,11 +58,9 @@ public class MainActivity extends AppCompatActivity {
     //****************************************** UI **********************************************//
 
     private void setupView() {
-        sendBtn = findViewById(R.id.sendBtn);
+        findViewById(R.id.sendBtn).setOnClickListener(mOnCLickListener);
         inputEdt = findViewById(R.id.inputEdt);
         consoleTxt = findViewById(R.id.consoleTxt);
-
-        sendBtn.setOnClickListener(mOnCLickListener);
     }
 
     private View.OnClickListener mOnCLickListener = new View.OnClickListener() {
@@ -78,8 +80,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void cout(final String newLine) {
-        consoleTxt.append("\n");
-        consoleTxt.append(newLine);
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                consoleTxt.append("\n");
+                consoleTxt.append(newLine);
+            }
+        });
+
     }
 
     //********************************************************************************************//
@@ -93,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
     private BleServer getBleServer() {
         if (mBleServer == null) {
             mBleServer = BleServer.instance(this
-                    , new Handler(Looper.getMainLooper())
+                    , mHandler
                     , mServerListener);
         }
         return mBleServer;
@@ -190,7 +198,11 @@ public class MainActivity extends AppCompatActivity {
                         break;
 
                     case DataRead:
-                        cout("Data Read Value: -> " + event.payload.value);
+                        String cmd = event.payload.value;
+                        cout("Data Read Value: -> " + cmd);
+                        if (cmd.equalsIgnoreCase("open")) {
+                            openGate();
+                        }
                         break;
 
                     case DataWritten:
@@ -227,31 +239,20 @@ public class MainActivity extends AppCompatActivity {
     //********************************************************************************************//
 
     //****************************************** USB *********************************************//
-    private UsbAoaManager mUsbAoaManager;
-    private boolean isUsbSocketOpen;
-    private Socket mAoaSocket;
 
     private UsbHostManager mUsbHostManager;
     private Socket mUsbHostSocket;
 
-    private void setupManagers() {
+    private void setupGateController() {
+        cout("Setting Gate Controller");
 
-        //**********************************************
-        //****************** USB AOA *******************
-        //**********************************************
-        mUsbAoaManager = new UsbAoaManager(this);
-        mUsbAoaManager.probe(new UsbAoaManager.Listener() {
-            @Override
-            public void onSelectAccessory(UsbAccessory[] accessoryArray) {
-                mUsbAoaManager.createSocket(accessoryArray[0], mAccessoryListener);
-            }
+        GateController.Builder gateControllerBuilder = GateController.Builder.create();
 
-            @Override
-            public void onSocketCreated(Socket socket) {
-                mAoaSocket = socket;
-                mAoaSocket.open();
-            }
-        });
+        gateControllerBuilder.aoaChip(GateController.AOAChip.Atmega328)
+                .aoaManager(new UsbAoaManager(this));
+
+        gateController = gateControllerBuilder.build();
+        gateController.setup();
 
 
         //**********************************************
@@ -282,31 +283,16 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private Socket.AccessoryListener mAccessoryListener = new Socket.AccessoryListener() {
-        @Override
-        public void onError(Socket.AccessoryError error) {
-            isUsbSocketOpen = false;
-            cout("AccessoryListener.onError -> " + error.name());
-        }
-
-        @Override
-        public void onOpen() {
-            isUsbSocketOpen = true;
-            cout("AccessoryListener.onOpen()");
-            //vmcInput = new VmcInput(new ChunkQueue());
-            //mCurPeripheral = new Cashless2(MdbManager.this);
-        }
-
-        @Override
-        public void onRead(byte[] data) {
-            cout("AccessoryListener.onRead() -> " + new String(data));
-            if (isUsbSocketOpen) {
-                // Feed the Vmc Action queue before being parsed
-                //vmcInput.chunkQueue.offer(data);
-            }
-        }
-    };
-
     //********************************************************************************************//
+
+    private void openGate() {
+        if (gateController != null) {
+            cout("Opening Door");
+            gateController.openGate();
+        }
+        else {
+            cout("Error when Opening Door, GateController -> null");
+        }
+    }
 
 }

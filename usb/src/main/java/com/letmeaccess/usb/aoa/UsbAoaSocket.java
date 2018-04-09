@@ -183,7 +183,7 @@ import java.io.OutputStream;
 
     }
 
-    class SenderThread extends HandlerThread {
+    /* package */ class SenderThread extends HandlerThread {
 
         private static final int MAX_BUF_SIZE = 1024;
         private Handler mHandler;

@@ -13,12 +13,9 @@ import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
-
 import com.letmeaccess.ble.client.BleConnection;
 import com.letmeaccess.ble.client.BleManager;
-
 import java.util.List;
 import pub.devrel.easypermissions.EasyPermissions;
 
@@ -28,7 +25,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     private static final int REQ_CODE_COARSE_LOC_PERM = 1021;
 
     private Button sendBtn;
-    private EditText inputEdt;
+    //private EditText inputEdt;
     private TextView consoleTxt;
     private Handler mHandler = new Handler();
 
@@ -87,7 +84,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     private void setupView() {
         sendBtn = findViewById(R.id.sendBtn);
-        inputEdt = findViewById(R.id.inputEdt);
+        //inputEdt = findViewById(R.id.inputEdt);
         consoleTxt = findViewById(R.id.consoleTxt);
 
         sendBtn.setOnClickListener(mOnCLickListener);
@@ -105,8 +102,8 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     };
 
     private void onSendBtnClick() {
-        String data = inputEdt.getText().toString();
-        mBleConnection.writeRx(data);
+        //String data = inputEdt.getText().toString();
+        mBleConnection.writeRx("open");
     }
 
     public void cout(final String text) {
