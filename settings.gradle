@@ -1,6 +1,5 @@
 include ':clientapp',
         ':client',
         ':serverapp',
-        ':server',
-        ':usb'
+        ':server'
 
