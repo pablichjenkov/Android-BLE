@@ -5,44 +5,51 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.hardware.usb.UsbDevice;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
-import android.view.View;
-import android.widget.EditText;
+import android.text.method.ScrollingMovementMethod;
 import android.widget.TextView;
 import com.letmeaccess.ble.server.BleServer;
 import com.letmeaccess.ble.server.BleServerConnection;
 import com.letmeaccess.ble.serverapp.gate.GateController;
 import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
-import com.letmeaccess.usb.host.UsbDeviceConfiguration;
 import com.letmeaccess.usb.host.UsbHostManager;
-import java.util.Map;
 
 
 public class MainActivity extends AppCompatActivity {
 
-    private EditText inputEdt;
+    private enum Stage {
+        Idle,
+        UsbSetup,
+        BleSetup,
+        Up
+    }
+
+    private Stage mStage;
+    private GateController gateController;
     private TextView consoleTxt;
     private Handler mHandler = new Handler(Looper.getMainLooper());
-    private GateController gateController;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        mStage = Stage.Idle;
         setupView();
         setupGateController();
-        createBleServer();
     }
 
     protected void onResume() {
         super.onResume();
-        resumeBleServer();
+
+        if (mStage == Stage.BleSetup) {
+            resumeBleServer();
+        }
+
     }
 
     @Override
@@ -58,25 +65,12 @@ public class MainActivity extends AppCompatActivity {
     //****************************************** UI **********************************************//
 
     private void setupView() {
-        findViewById(R.id.sendBtn).setOnClickListener(mOnCLickListener);
-        inputEdt = findViewById(R.id.inputEdt);
         consoleTxt = findViewById(R.id.consoleTxt);
+        consoleTxt.setMovementMethod(new ScrollingMovementMethod());
     }
 
-    private View.OnClickListener mOnCLickListener = new View.OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            switch (v.getId()) {
-                case R.id.sendBtn:
-                    onSendBtnClick();
-                    break;
-            }
-        }
-    };
-
     private void onSendBtnClick() {
-        String dataToSend = inputEdt.getText().toString();
-        mServerConnection.write(dataToSend);
+        mServerConnection.write("letmeaccess");
     }
 
     private void cout(final String newLine) {
@@ -244,21 +238,22 @@ public class MainActivity extends AppCompatActivity {
     private Socket mUsbHostSocket;
 
     private void setupGateController() {
-        cout("Setting Gate Controller");
+        cout("Setting up Gate Controller");
+        mStage = Stage.UsbSetup;
 
         GateController.Builder gateControllerBuilder = GateController.Builder.create();
 
         gateControllerBuilder.aoaChip(GateController.AOAChip.Atmega328)
-                .aoaManager(new UsbAoaManager(this));
+                .aoaManager(new UsbAoaManager(this))
+                .listener(mGateControllerListener);
 
         gateController = gateControllerBuilder.build();
         gateController.setup();
 
-
         //**********************************************
         //****************** USB HOST ******************
         //**********************************************
-        mUsbHostManager = new UsbHostManager(this);
+        /*mUsbHostManager = new UsbHostManager(this);
         mUsbHostManager.probe(new UsbHostManager.Listener() {
             @Override
             public void onSelectUsbDevice(Map<String, UsbDevice> usbDeviceMap) {
@@ -279,11 +274,9 @@ public class MainActivity extends AppCompatActivity {
 
                 return configuration;
             }
-        });
+        });*/
 
     }
-
-    //********************************************************************************************//
 
     private void openGate() {
         if (gateController != null) {
@@ -294,5 +287,22 @@ public class MainActivity extends AppCompatActivity {
             cout("Error when Opening Door, GateController -> null");
         }
     }
+
+
+    private GateController.Listener mGateControllerListener = new GateController.Listener() {
+        @Override
+        public void onGateControllerReady() {
+            cout("Gate Controller Setup Success");
+            createBleServer();
+        }
+
+        @Override
+        public void onGateControllerError(GateController.Error error) {
+            cout("Gate Controller Setup Error. Make sure USB cable is plugged in.");
+            mStage = Stage.Idle;
+        }
+    };
+
+    //********************************************************************************************//
 
 }

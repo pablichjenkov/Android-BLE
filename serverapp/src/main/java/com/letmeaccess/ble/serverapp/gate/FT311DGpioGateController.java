@@ -1,7 +1,6 @@
 package com.letmeaccess.ble.serverapp.gate;
 
 import android.hardware.usb.UsbAccessory;
-import android.util.Log;
 import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
 
@@ -11,15 +10,21 @@ public class FT311DGpioGateController implements GateController {
     private UsbAoaManager mUsbAoaManager;
     private Socket mSocket;
     private FT311Gpio mFt311Gpio;
-    private boolean isUsbSocketOpen;
+    private Listener mListener;
 
 
-    /* package */ FT311DGpioGateController(UsbAoaManager aoaManager) {
+    /* package */ FT311DGpioGateController(UsbAoaManager aoaManager, Listener listener) {
         mUsbAoaManager = aoaManager;
+        mListener = listener;
     }
 
     @Override
     public void setup() {
+
+        UsbAccessory[] attachedAccessories = mUsbAoaManager.getAttachedAccessories();
+        if (attachedAccessories == null || attachedAccessories.length <= 0) {
+            mListener.onGateControllerError(Error.NoAccessoryPluggedIn);
+        }
 
         mUsbAoaManager.probe(new UsbAoaManager.Listener() {
             @Override
@@ -38,9 +43,21 @@ public class FT311DGpioGateController implements GateController {
 
     @Override
     public void openGate() {
-        if (mSocket != null && isUsbSocketOpen && mFt311Gpio != null) {
+        if (mSocket != null && mSocket.isConnected() && mFt311Gpio != null) {
             mFt311Gpio.send((byte)0xFF);
         }
+        /* If we need to pull down the Voltage for the gate to close use code bellow.
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (mAoaSocket != null && isUsbSocketOpen *//*&& mAoaSocket.isConnected()*//*) {
+                    mAoaSocket.write(new byte[]{(byte)0x00});
+                }
+                else {
+                    cout("Usb Connection Failed");
+                }
+            }
+        }, 2000);*/
     }
 
     @Override
@@ -55,17 +72,11 @@ public class FT311DGpioGateController implements GateController {
     private Socket.AccessoryListener mAccessoryListener = new Socket.AccessoryListener() {
         @Override
         public void onError(Socket.AccessoryError error) {
-            isUsbSocketOpen = false;
-            Log.d("Pablo","AccessoryListener.onError -> " + error.name());
+            mListener.onGateControllerError(Error.ConnectionFail);
         }
 
         @Override
         public void onOpen() {
-            isUsbSocketOpen = true;
-            Log.d("Pablo","AccessoryListener.onOpen()");
-            //vmcInput = new VmcInput(new ChunkQueue());
-            //mCurPeripheral = new Cashless2(MdbManager.this);
-
             FT311Gpio.PinOut.Builder pinOutBuilder = FT311Gpio.PinOut.Builder.create();
 
             FT311Gpio.PinOut pinOut = pinOutBuilder.pin0(true)
@@ -79,11 +90,12 @@ public class FT311DGpioGateController implements GateController {
 
             mFt311Gpio = new FT311Gpio(mSocket);
             mFt311Gpio.configure(pinOut);
+
+            mListener.onGateControllerReady();
         }
 
         @Override
         public void onRead(byte[] data) {
-            Log.d("Pablo","AccessoryListener.onRead() -> " + new String(data));
             // Feed the Vmc Action queue before being parsed
             //vmcInput.chunkQueue.offer(data);
         }

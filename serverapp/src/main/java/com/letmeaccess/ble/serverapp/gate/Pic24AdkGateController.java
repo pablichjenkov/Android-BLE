@@ -5,11 +5,13 @@ import com.letmeaccess.usb.aoa.UsbAoaManager;
 
 public class Pic24AdkGateController implements GateController {
 
-    private UsbAoaManager aoaManager;
+    private UsbAoaManager mAoaManager;
+    private Listener mListener;
 
 
-    /* package */ Pic24AdkGateController(UsbAoaManager aoaManager) {
-        this.aoaManager = aoaManager;
+    /* package */ Pic24AdkGateController(UsbAoaManager aoaManager, Listener listener) {
+        mAoaManager = aoaManager;
+        mListener = listener;
     }
 
     @Override

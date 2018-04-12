@@ -1,7 +1,6 @@
 package com.letmeaccess.ble.serverapp.gate;
 
 import android.hardware.usb.UsbAccessory;
-import android.util.Log;
 import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
 
@@ -10,15 +9,22 @@ public class AtmegaGateController implements GateController {
 
     private UsbAoaManager mUsbAoaManager;
     private Socket mSocket;
-    private boolean isUsbSocketOpen;
+    private Listener mListener;
 
 
-    /* package */ AtmegaGateController(UsbAoaManager aoaManager) {
+    /* package */ AtmegaGateController(UsbAoaManager aoaManager, Listener listener) {
         mUsbAoaManager = aoaManager;
+        mListener = listener;
     }
 
     @Override
     public void setup() {
+
+        UsbAccessory[] attachedAccessories = mUsbAoaManager.getAttachedAccessories();
+        if (attachedAccessories == null || attachedAccessories.length <= 0) {
+            mListener.onGateControllerError(Error.NoAccessoryPluggedIn);
+        }
+
         mUsbAoaManager.probe(new UsbAoaManager.Listener() {
             @Override
             public void onSelectAccessory(UsbAccessory[] accessoryArray) {
@@ -35,20 +41,9 @@ public class AtmegaGateController implements GateController {
 
     @Override
     public void openGate() {
-        if (mSocket != null && isUsbSocketOpen /*&& mAoaSocket.isConnected()*/) {
+        if (mSocket != null && mSocket.isConnected()) {
             mSocket.write(new byte[]{(byte)0x01});
         }
-        /*mHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (mAoaSocket != null && isUsbSocketOpen *//*&& mAoaSocket.isConnected()*//*) {
-                    mAoaSocket.write(new byte[]{(byte)0x00});
-                }
-                else {
-                    cout("Usb Connection Failed");
-                }
-            }
-        }, 2000);*/
     }
 
     @Override
@@ -60,25 +55,18 @@ public class AtmegaGateController implements GateController {
     private Socket.AccessoryListener mAccessoryListener = new Socket.AccessoryListener() {
         @Override
         public void onError(Socket.AccessoryError error) {
-            isUsbSocketOpen = false;
-            Log.d("Pablo","AccessoryListener.onError -> " + error.name());
+            mListener.onGateControllerError(Error.ConnectionFail);
         }
 
         @Override
         public void onOpen() {
-            isUsbSocketOpen = true;
-            Log.d("Pablo","AccessoryListener.onOpen()");
-            //vmcInput = new VmcInput(new ChunkQueue());
-            //mCurPeripheral = new Cashless2(MdbManager.this);
+            mListener.onGateControllerReady();
         }
 
         @Override
         public void onRead(byte[] data) {
-            //cout("AccessoryListener.onRead() -> " + new String(data));
-            if (isUsbSocketOpen) {
-                // Feed the Vmc Action queue before being parsed
-                //vmcInput.chunkQueue.offer(data);
-            }
+            // Feed the Vmc Action queue before being parsed
+            //vmcInput.chunkQueue.offer(data);
         }
     };
 
