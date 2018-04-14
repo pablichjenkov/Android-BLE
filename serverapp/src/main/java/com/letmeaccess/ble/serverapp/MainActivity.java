@@ -11,8 +11,8 @@ import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
 import android.text.method.ScrollingMovementMethod;
 import android.widget.TextView;
-import com.letmeaccess.ble.server.BleServer;
-import com.letmeaccess.ble.server.BleServerConnection;
+import com.letmeaccess.ble.peripheral.BleServer;
+import com.letmeaccess.ble.peripheral.BleServerConnection;
 import com.letmeaccess.ble.serverapp.gate.GateController;
 import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
@@ -241,14 +241,9 @@ public class MainActivity extends AppCompatActivity {
         cout("Setting up Gate Controller");
         mStage = Stage.UsbSetup;
 
-        GateController.Builder gateControllerBuilder = GateController.Builder.create();
-
-        gateControllerBuilder.aoaChip(GateController.AOAChip.Atmega328)
-                .aoaManager(new UsbAoaManager(this))
-                .listener(mGateControllerListener);
-
-        gateController = gateControllerBuilder.build();
-        gateController.setup();
+        GateController.Prober prober = GateController.Prober.create();
+        prober.aoaManager(new UsbAoaManager(this)).listener(mGateControllerListener);
+        prober.probe();
 
         //**********************************************
         //****************** USB HOST ******************
@@ -291,9 +286,12 @@ public class MainActivity extends AppCompatActivity {
 
     private GateController.Listener mGateControllerListener = new GateController.Listener() {
         @Override
-        public void onGateControllerReady() {
+        public void onGateControllerReady(GateController gateController) {
             cout("Gate Controller Setup Success");
+            mStage = Stage.BleSetup;
+            MainActivity.this.gateController = gateController;
             createBleServer();
+            resumeBleServer();
         }
 
         @Override

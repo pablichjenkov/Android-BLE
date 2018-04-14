@@ -1,5 +1,3 @@
 include ':clientapp',
-        ':client',
         ':serverapp',
-        ':server'
-
+        ':ble'

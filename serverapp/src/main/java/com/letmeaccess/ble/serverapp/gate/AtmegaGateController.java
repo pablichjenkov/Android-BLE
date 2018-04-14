@@ -1,42 +1,27 @@
 package com.letmeaccess.ble.serverapp.gate;
 
-import android.hardware.usb.UsbAccessory;
 import com.letmeaccess.usb.Socket;
-import com.letmeaccess.usb.aoa.UsbAoaManager;
 
 
 public class AtmegaGateController implements GateController {
 
-    private UsbAoaManager mUsbAoaManager;
     private Socket mSocket;
     private Listener mListener;
 
 
-    /* package */ AtmegaGateController(UsbAoaManager aoaManager, Listener listener) {
-        mUsbAoaManager = aoaManager;
+    /* package */ AtmegaGateController(Listener listener) {
         mListener = listener;
     }
 
     @Override
-    public void setup() {
+    public Socket.AccessoryListener getAccessoryListener() {
+        return mAccessoryListener;
+    }
 
-        UsbAccessory[] attachedAccessories = mUsbAoaManager.getAttachedAccessories();
-        if (attachedAccessories == null || attachedAccessories.length <= 0) {
-            mListener.onGateControllerError(Error.NoAccessoryPluggedIn);
-        }
-
-        mUsbAoaManager.probe(new UsbAoaManager.Listener() {
-            @Override
-            public void onSelectAccessory(UsbAccessory[] accessoryArray) {
-                mUsbAoaManager.createSocket(accessoryArray[0], mAccessoryListener);
-            }
-
-            @Override
-            public void onSocketCreated(Socket socket) {
-                mSocket = socket;
-                mSocket.open();
-            }
-        });
+    @Override
+    public void setup(Socket socket) {
+        mSocket = socket;
+        mSocket.open();
     }
 
     @Override
@@ -48,7 +33,7 @@ public class AtmegaGateController implements GateController {
 
     @Override
     public void close() {
-        mUsbAoaManager.close();
+        mSocket.close();
     }
 
 
@@ -59,8 +44,13 @@ public class AtmegaGateController implements GateController {
         }
 
         @Override
+        public byte[] onProvideCloseCommand() {
+            return new byte[]{(byte)'s',(byte)'h',(byte)'u',(byte)'t'};
+        }
+
+        @Override
         public void onOpen() {
-            mListener.onGateControllerReady();
+            mListener.onGateControllerReady(AtmegaGateController.this);
         }
 
         @Override

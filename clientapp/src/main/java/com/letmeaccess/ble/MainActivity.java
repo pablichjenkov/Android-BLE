@@ -14,8 +14,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-import com.letmeaccess.ble.client.BleConnection;
-import com.letmeaccess.ble.client.BleManager;
+import com.letmeaccess.ble.central.BleConnection;
+import com.letmeaccess.ble.central.BleManager;
 import java.util.List;
 import pub.devrel.easypermissions.EasyPermissions;
 
@@ -190,6 +190,11 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             } else {
                 if (scanEvent.payload.isScanning) {
                     if (scanEvent.payload.scanResults.size() > 0) {
+
+                        if (mBleConnection != null) {
+                            return;
+                        }
+
                         // TODO(Pablo): Instead of picking the first device filter by letmeaccess code matching
                         // the current user condo device code, or device address. May require connect first.
                         BluetoothDevice bluetoothDevice = scanEvent.payload.scanResults.get(0).getDevice();
@@ -206,6 +211,8 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
                 }
             }
         }
+
+
 
     };
 

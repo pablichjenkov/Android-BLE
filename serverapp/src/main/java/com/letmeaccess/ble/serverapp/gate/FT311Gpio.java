@@ -5,12 +5,12 @@ import com.letmeaccess.usb.Socket;
 
 public class FT311Gpio {
 
-    private Socket socket;
+    private Socket mSocket;
     private byte pinoutMap;
     private byte []	writeusbdata;
 
-    public FT311Gpio(Socket socket) {
-        this.socket = socket;
+    public FT311Gpio(Socket mSocket) {
+        this.mSocket = mSocket;
         writeusbdata = new byte[4];
     }
 
@@ -26,7 +26,7 @@ public class FT311Gpio {
         writeusbdata[2] = pinoutMap;
         writeusbdata[3] = inPutMap;
 
-        socket.write(writeusbdata);
+        mSocket.write(writeusbdata);
     }
 
     public void send(byte portData) {
@@ -37,16 +37,16 @@ public class FT311Gpio {
         writeusbdata[2] = 0x00;
         writeusbdata[3] = 0x00;
 
-        socket.write(writeusbdata);
+        mSocket.write(writeusbdata);
     }
 
-    public void close() {
+    public void reset() {
         writeusbdata[0] = 0x14;
         writeusbdata[1] = 0x00;
         writeusbdata[2] = 0x00;
         writeusbdata[3] = 0x00;
 
-        socket.write(writeusbdata);
+        mSocket.write(writeusbdata);
     }
 
 

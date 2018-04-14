@@ -1,80 +1,94 @@
 package com.letmeaccess.ble.serverapp.gate;
 
+import android.hardware.usb.UsbAccessory;
+import android.util.Log;
+import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
 
 
 public interface GateController {
-
-    enum AOAChip {
-        Atmega328,
-        Atmega2560,
-        Pic24Adk,
-        FT311D
-    }
 
     enum Error {
         NoAccessoryPluggedIn,
         ConnectionFail
     }
 
-    void setup();
+    Socket.AccessoryListener getAccessoryListener();
+
+    void setup(Socket socket);
 
     void openGate();
 
     void close();
 
     interface Listener {
-        void onGateControllerReady();
+        void onGateControllerReady(GateController gateController);
         void onGateControllerError(Error error);
     }
 
 
-    class Builder {
+    class Prober {
+
+        private static final String AOA_MANUFACTURER_FTDI = "FTDI";
+        private static final String AOA_MANUFACTURER_ATMEGA = "ATMEGA";
 
         private UsbAoaManager mAoaManager;
-        private AOAChip mAoaChip;
-        private Listener mListener;
+        private Listener mGateListener;
+        private GateController gateController;
+        private Socket.AccessoryListener accessoryListener;
 
-        public static Builder create() {
-            return new Builder();
+        public static Prober create() {
+            return new Prober();
         }
 
-        public Builder aoaManager(UsbAoaManager aoaManager) {
+        public Prober aoaManager(UsbAoaManager aoaManager) {
             mAoaManager = aoaManager;
             return this;
         }
 
-        public Builder listener(Listener listener) {
-            mListener = listener;
+        public Prober listener(Listener gateListener) {
+            mGateListener = gateListener;
             return this;
         }
 
-        public Builder aoaChip(AOAChip aoaChip) {
-            mAoaChip = aoaChip;
-            return this;
-        }
+        public void probe() {
 
-        public GateController build() {
-            GateController gateController = null;
+            if (mAoaManager != null && mGateListener != null) {
+                UsbAccessory[] attachedAccessories = mAoaManager.getAttachedAccessories();
 
-            if (mAoaManager != null && mListener != null && mAoaChip != null) {
-                switch (mAoaChip) {
-                    case Pic24Adk:
-                        gateController = new Pic24AdkGateController(mAoaManager, mListener);
-                        break;
-
-                    case Atmega328:
-                    case Atmega2560:
-                        gateController = new AtmegaGateController(mAoaManager, mListener);
-                        break;
-
-                    case FT311D:
-                        gateController = new FT311DGpioGateController(mAoaManager, mListener);
-                        break;
+                if (attachedAccessories == null || attachedAccessories.length <= 0) {
+                    mGateListener.onGateControllerError(Error.NoAccessoryPluggedIn);
                 }
+
+                mAoaManager.probe(new UsbAoaManager.Listener() {
+
+                    @Override
+                    public void onSelectAccessory(UsbAccessory[] accessoryArray) {
+
+                        String manufacturer = accessoryArray[0].getManufacturer();
+                        Log.d("Pablo", manufacturer);
+
+
+                        if (manufacturer.equalsIgnoreCase(AOA_MANUFACTURER_FTDI)) {
+                            gateController = new FT311DGpioGateController(mGateListener);
+                        }
+                        else {
+                            gateController = new AtmegaGateController(mGateListener);
+                        }
+
+                        accessoryListener = gateController.getAccessoryListener();
+                        mAoaManager.createSocket(accessoryArray[0], accessoryListener);
+                    }
+
+                    @Override
+                    public void onSocketCreated(Socket socket) {
+                        gateController.setup(socket);
+                    }
+
+                });
+
             }
 
-            return gateController;
         }
 
     }

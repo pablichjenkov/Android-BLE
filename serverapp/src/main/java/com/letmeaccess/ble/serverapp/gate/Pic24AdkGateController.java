@@ -1,5 +1,6 @@
 package com.letmeaccess.ble.serverapp.gate;
 
+import com.letmeaccess.usb.Socket;
 import com.letmeaccess.usb.aoa.UsbAoaManager;
 
 
@@ -15,7 +16,12 @@ public class Pic24AdkGateController implements GateController {
     }
 
     @Override
-    public void setup() {
+    public Socket.AccessoryListener getAccessoryListener() {
+        return null;
+    }
+
+    @Override
+    public void setup(Socket socket) {
 
     }
 
@@ -28,4 +34,5 @@ public class Pic24AdkGateController implements GateController {
     public void close() {
 
     }
+
 }
