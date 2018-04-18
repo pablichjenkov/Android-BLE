@@ -91,6 +91,9 @@ public interface GateController {
 
         }
 
+        public void close() {
+            mAoaManager.close();
+        }
     }
 
 }

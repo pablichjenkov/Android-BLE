@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'de.felixschulze.gradle.hockeyapp'
 
+
 android {
     compileSdkVersion rootProject.compileSdkVersion
 
@@ -38,7 +39,8 @@ dependencies {
     implementation "com.android.support.constraint:constraint-layout:$rootProject.constrainLayoutVersion"
 
     // Community
-    implementation 'com.squareup.okhttp3:okhttp:3.10.0'
+    //implementation 'com.squareup.okhttp3:okhttp:3.10.0'
+    implementation 'com.github.joaocruz04:jsoap:1.0.2'
     implementation 'net.hockeyapp.android:HockeySDK:5.1.0'
 
 
@@ -49,6 +51,6 @@ dependencies {
 }
 
 hockeyapp {
-    apiToken "df8c1f79c5844ea892e018c1957e6d57"
+    apiToken "f81a69d159914aad81b2c65bd0217284"
     notes "Release notes should go here"
 }
