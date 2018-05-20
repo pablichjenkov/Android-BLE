@@ -10,31 +10,20 @@ import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
 import android.text.method.ScrollingMovementMethod;
-import android.util.Log;
 import android.widget.TextView;
 import com.letmeaccess.ble.peripheral.BleServer;
 import com.letmeaccess.ble.peripheral.BleServerConnection;
-import com.letmeaccess.ble.serverapp.gate.GateController;
-import com.letmeaccess.usb.Socket;
-import com.letmeaccess.usb.aoa.UsbAoaManager;
-import com.letmeaccess.usb.host.UsbHostManager;
-import pt.joaocruz04.lib.SOAPManager;
-import pt.joaocruz04.lib.misc.JSoapCallback;
-import pt.joaocruz04.lib.misc.JsoapError;
 
 
 public class MainActivity extends AppCompatActivity {
 
     private enum Stage {
         Idle,
-        UsbSetup,
         BleSetup,
         Up
     }
 
     private Stage mStage;
-    private GateController.Prober prober;
-    private GateController gateController;
     private TextView consoleTxt;
     private Handler mHandler = new Handler(Looper.getMainLooper());
 
@@ -45,65 +34,18 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mStage = Stage.Idle;
         setupView();
-        HttpsTrustManager.disableSSLCertificateChecking();
-        setupGateController();
     }
 
     protected void onResume() {
         super.onResume();
-
         if (mStage == Stage.BleSetup) {
             resumeBleServer();
         }
-
-
-        String url="https://ws.letmeaccess.com/lmaws/n_lmaws.asmx";//"https://ws.letmeaccess.com";
-        String namespace="http://tempurl.org";
-        String method = "f_cual_usr_status";
-        String soap_action = "http://tempurl.org/f_cual_usr_status";//"http://ws.cdyne.com/WeatherWS/GetCityWeatherByZIP";
-
-        SOAPManager.get(namespace
-                , url
-                , method
-                , soap_action
-                , new UserStatusReq(1,"idea")
-                , String.class
-                , new JSoapCallback() {
-                    @Override
-                    public void onSuccess(Object result) {
-                        String res = (String)result;
-                        Log.d("Pablo", res);
-                    }
-
-                    @Override
-                    public void onError(int error) {
-                        switch (error) {
-                            case JsoapError.NETWORK_ERROR: Log.d("Pablo", "Network error"); break;
-                            case JsoapError.PARSE_ERROR: Log.d("Pablo", "Parsing error"); break;
-                            default: Log.d("Pablo", "Unknown error"); break;
-                        }
-                    }
-
-                    @Override
-                    public void onDebugMessage(String title, String message) {
-                        //Log.d("Pablo", title + ":" + message);
-                    }
-
-        });
-
-
     }
 
     @Override
     protected void onDestroy() {
         getBleServer().shutdownServer();
-        if (gateController != null) {
-            gateController.close();
-        }
-        if (prober != null) {
-            prober.close();
-        }
-
         super.onDestroy();
     }
 
@@ -239,9 +181,6 @@ public class MainActivity extends AppCompatActivity {
                     case DataRead:
                         String cmd = event.payload.value;
                         cout("Data Read Value: -> " + cmd);
-                        if (cmd.equalsIgnoreCase("open")) {
-                            openGate();
-                        }
                         break;
 
                     case DataWritten:
@@ -272,77 +211,6 @@ public class MainActivity extends AppCompatActivity {
                     // Do nothing
             }
 
-        }
-    };
-
-    //********************************************************************************************//
-
-    //****************************************** USB *********************************************//
-
-    private UsbHostManager mUsbHostManager;
-    private Socket mUsbHostSocket;
-
-    private void setupGateController() {
-        cout("Setting up Gate Controller");
-        mStage = Stage.UsbSetup;
-
-        prober = GateController.Prober.create();
-        prober.aoaManager(new UsbAoaManager(this)).listener(mGateControllerListener);
-        prober.probe();
-
-        //**********************************************
-        //****************** USB HOST ******************
-        //**********************************************
-        /*mUsbHostManager = new UsbHostManager(this);
-        mUsbHostManager.probe(new UsbHostManager.Listener() {
-            @Override
-            public void onSelectUsbDevice(Map<String, UsbDevice> usbDeviceMap) {
-
-            }
-
-            @Override
-            public void onSocketCreated(Socket socket) {
-
-            }
-
-            @Override
-            public UsbDeviceConfiguration onProvideDeviceConfiguration(UsbDevice usbDevice) {
-                UsbDeviceConfiguration configuration = new UsbDeviceConfiguration();
-                configuration.deviceInterface = usbDevice.getInterface(0);
-                configuration.readEndPoint = configuration.deviceInterface.getEndpoint(0);
-                configuration.writeEndPoint = configuration.deviceInterface.getEndpoint(1);
-
-                return configuration;
-            }
-        });*/
-
-    }
-
-    private void openGate() {
-        if (gateController != null) {
-            cout("Opening Door");
-            gateController.openGate();
-        }
-        else {
-            cout("Error when Opening Door, GateController -> null");
-        }
-    }
-
-
-    private GateController.Listener mGateControllerListener = new GateController.Listener() {
-        @Override
-        public void onGateControllerReady(GateController gateController) {
-            cout("Gate Controller Setup Success");
-            mStage = Stage.BleSetup;
-            MainActivity.this.gateController = gateController;
-            createBleServer();
-            resumeBleServer();
-        }
-
-        @Override
-        public void onGateControllerError(GateController.Error error) {
-            cout("Gate Controller Setup Error. Make sure USB cable is plugged in.");
-            mStage = Stage.Idle;
         }
     };
 

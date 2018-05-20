@@ -31,21 +31,19 @@ dependencies {
     // Intelligence Solutions
     implementation project(':ble')
     //implementation 'com.letmeaccess:ble:1.0.0'
-    implementation 'com.letmeaccess:usb:1.3.1'
 
     // Android Support
     implementation "com.android.support:appcompat-v7:$rootProject.supportLibraryVersion"
     implementation "com.android.support:design:$rootProject.supportLibraryVersion"
     implementation "com.android.support.constraint:constraint-layout:$rootProject.constrainLayoutVersion"
 
-    // Community
-    //implementation 'com.squareup.okhttp3:okhttp:3.10.0'
-    implementation 'com.github.joaocruz04:jsoap:1.0.2'
+    // CI-CD
     implementation 'net.hockeyapp.android:HockeySDK:5.1.0'
 
-
+    // Unit Test
     testImplementation 'junit:junit:4.12'
 
+    // Instrumentation Test
     androidTestImplementation 'com.android.support.test:runner:1.0.1'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.1'
 }
